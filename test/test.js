@@ -107,4 +107,25 @@ describe("TSax", function() {
       assertNextState("<?foo >??>", "processingInstruction", "foo", ">?");
     });
   });
+
+  describe("doctype", function() {
+    it("parses doctype", function() {
+      assertNextState("<!DOCTYPE html>", "doctype", "html");
+      const musicXmlDoctype = 'score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd"';
+      assertNextState(`<!DOCTYPE ${musicXmlDoctype}>`, "doctype", musicXmlDoctype);
+    });
+
+    it("parses doctype with ELEMENT, ATTLIST and ENTITY children", function() {
+      const doctype = `doc [
+        <!ELEMENT doc (e)>
+        <!ELEMENT e (#PCDATA)>
+        <!ATTLIST e
+          a1 CDATA 'a1 default'
+          a2 NMTOKENS 'a2 default'
+        >
+        <!ENTITY x SYSTEM '013.ent'>
+      ]`;
+      assertNextState(`<!DOCTYPE ${doctype}>`, "doctype", doctype);
+    });
+  });
 });
