@@ -18,7 +18,7 @@ const letterDCC = "D".charCodeAt(0);
 /**
 * @param {string} S
 */
-export function TSax(S) {
+function tSax(S) {
   let pos = 0;
   let tagNameStart = -1;
   let tagNameEnd = -1;
@@ -384,3 +384,7 @@ export function TSax(S) {
     },
   };
 }
+
+try {
+  module.exports.tSax = tSax;
+} catch (e) {}
