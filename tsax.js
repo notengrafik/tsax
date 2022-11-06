@@ -131,7 +131,7 @@ function tSax(S) {
   function parseStartTag() {
     tagNameStart = pos + 1;
     pos += 2;
-    while (" \n\t\r>".indexOf(S[pos]) < 0) {
+    while (" \n\t\r/>".indexOf(S[pos]) < 0) {
       pos += 1;
     }
     tagNameEnd = pos;
@@ -174,12 +174,10 @@ function tSax(S) {
    * string is returned.
    */
   function firstCharOf(chars) {
-    let char;
-    do {
+    while (chars.indexOf(S[pos]) < 0 && pos < S.length) {
       pos += 1;
-      char = S[pos];
-    } while (chars.indexOf(char) < 0 && char)
-    return char;
+    }
+    return S[pos];
   }
 
   return {
@@ -361,9 +359,9 @@ function tSax(S) {
       /** @type {Attributes} */
       const attributes = {};
 
-      if (tagEnd - tagNameEnd < 6) {
+      if (tagEnd - tagNameEnd < 5) {
         // There's no space for any attributes, so return early. The shortest
-        // XML attribute needs 6 characters, including leading space: ` x="y"`
+        // XML attribute needs 5 characters, including leading space: ` x=""`
         return attributes;
       }
 
@@ -374,6 +372,7 @@ function tSax(S) {
         const attributeStart = pos + 1;
 
         if (firstCharOf(">=") === ">") {
+          pos += 1;
           return attributes;
         }
 
