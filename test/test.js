@@ -7,9 +7,9 @@ const {expect} = require("chai");
  * @param {import("../tsax").TSax|string} tsax
  * @param {import("../tsax").EventType} expectedEvent
  * @param {string} [expectedValue]  tagName or string value, depending on the event type
- * @param {import("../tsax").Attributes|undefined|"error"} [expectedAttributes]
+ * @param {import("../tsax").Attributes|undefined|string} [expectedProperties]
  */
-function assertNextState(tsax, expectedEvent, expectedValue, expectedAttributes) {
+function assertNextState(tsax, expectedEvent, expectedValue, expectedProperties) {
   if (typeof tsax === "string") {
     tsax = tSax(tsax);
   }
@@ -19,23 +19,27 @@ function assertNextState(tsax, expectedEvent, expectedValue, expectedAttributes)
   } catch (e) {
     throw actualEvent === "error" ? new Error(tsax.error()) : e
   }
+  const actualAttributes = tsax.attributes();
   switch (expectedEvent) {
     case "endTag":
     case "singleTag":
     case "startTag":
       expect(tsax.tagName()).to.equal(expectedValue);
+      if (actualAttributes === "error" && expectedProperties !== "error") {
+        throw new Error(tsax.error());
+      }
       break;
     case "error":
     case "eof":
       break;
+    case "processingInstruction":
+      expect(tsax.piTarget()).to.equal(expectedValue);
+      expect(tsax.rawText()).to.equal(expectedProperties);
+      return;
     default:
       expect(tsax.rawText()).to.equal(expectedValue);
   }
-  const actualAttributes = tsax.attributes();
-  if (actualAttributes === "error" && expectedAttributes !== "error") {
-    throw new Error(tsax.error());
-  }
-  expect(actualAttributes).to.deep.equal(expectedAttributes);
+  expect(actualAttributes).to.deep.equal(expectedProperties);
 }
 
 
@@ -84,6 +88,18 @@ describe("TSax", function() {
   describe("text parrsing", function() {
     it("parses text", function() {
       assertNextState("foo<", "text", "foo");
+    });
+  });
+
+  describe("processing instructions", function() {
+    it("parses processing instructions", function() {
+      assertNextState("<?xml version='1.0' encoding='UTF-8'?>", "processingInstruction", "xml", "version='1.0' encoding='UTF-8'");
+      assertNextState("<?foo?>", "processingInstruction", "foo", "");
+      assertNextState("<?foo ?>", "processingInstruction", "foo", "");
+      assertNextState("<?foo  a?>", "processingInstruction", "foo", " a");
+      assertNextState("<?foo b ?>", "processingInstruction", "foo", "b ");
+      assertNextState("<?foo ?<?>", "processingInstruction", "foo", "?<");
+      assertNextState("<?foo >??>", "processingInstruction", "foo", ">?");
     });
   });
 });

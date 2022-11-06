@@ -9,6 +9,15 @@ const questionCC = "?".charCodeAt(0);
 const openCornerBracketCC = "[".charCodeAt(0);
 const letterDCC = "D".charCodeAt(0);
 const spaceCC = " ".charCodeAt(0);
+const nameEndMap = (() => {
+  /** @type Array.<true|undefined> Maps char codes that end a name to `true`*/
+  const nameEndMap = [];
+  const chars = [..." \t\n\r/>?"];
+  for (const char of chars) {
+    nameEndMap[char.charCodeAt(0)] = true;
+  }
+  return nameEndMap;
+})();
 
 
 /**
@@ -25,6 +34,7 @@ const spaceCC = " ".charCodeAt(0);
  *  tagName: () => string | undefined;
  *  localName: () => string | undefined;
  *  prefix: () => string | undefined;
+ *  piTarget: () => string | undefined;
  *  rawText: () => string | undefined;
  *  attributes: () => Attributes | undefined | "error";
  *  error: () => string | undefined;
@@ -43,6 +53,7 @@ function tSax(S) {
   let tagEnd = -1;
   let textStart = -1;
   let textEnd = -1;
+  let piTargetEnd = -1;
   /** @type {string|undefined} */
   let error = undefined;
 
@@ -135,20 +146,36 @@ function tSax(S) {
   }
 
   function parseStartTag() {
-    tagNameStart = pos + 1;
     pos += 1;
-    let charCode;
-    do {
-      pos += 1;
-      charCode = S.charCodeAt(pos);
-    } while (charCode > spaceCC && charCode !== closeBracketCC && charCode !== slashCC &&  pos < S.length)
-    tagNameEnd = pos;
+    tagNameStart = pos;
+    tagNameEnd = parseName();
     tagEnd = S.indexOf(">", tagNameEnd);
     if (tagEnd < 0) {
       return unexpectedEOF(tagNameStart, "'>'");
     }
     pos = tagEnd + 1;
     return S.charCodeAt(tagEnd - 1) === slashCC ? "singleTag" : "startTag";
+  }
+
+  function parseProcessingInstruction() {
+    pos += 2;
+    tagNameStart = pos;
+    piTargetEnd = parseName();
+    tagEnd = S.indexOf("?>", piTargetEnd);
+    if (tagEnd < 0) {
+      return unexpectedEOF(tagNameStart, "'?>'");
+    }
+    textStart = piTargetEnd + 1;
+    textEnd = tagEnd >= textStart ? tagEnd : textStart;
+    pos = tagEnd + 2;
+    return "processingInstruction";
+  }
+
+  function parseName() {
+    do {
+      pos += 1;
+    } while (!nameEndMap[S.charCodeAt(pos)] && pos < S.length)
+    return pos;
   }
 
   /**
@@ -289,6 +316,7 @@ function tSax(S) {
       tagNameEnd = -1;
       textEnd = -1;
       tagEnd = -1;
+      piTargetEnd = -1;
 
       if (S.charCodeAt(pos) !== openBracketCC) {
         // When there is an error scanning for "<" (i.e. no "<" found), this is
@@ -301,7 +329,7 @@ function tSax(S) {
         case slashCC:
           return parseEndTag();
         case questionCC:
-          return parseText("processingInstruction", 2, "?>");
+          return parseProcessingInstruction();
         case exclamationCC:
           switch (S.charCodeAt(pos + 2)) {
             case minusCC:
@@ -325,7 +353,7 @@ function tSax(S) {
      * event is not a start or end tag.
      */
     tagName: function() {
-      return tagNameEnd > 0 ? S.substring(tagNameStart, tagNameEnd) : undefined
+      return tagNameEnd > 0 ? S.substring(tagNameStart, tagNameEnd) : undefined;
     },
 
     localName: function() {
@@ -336,6 +364,15 @@ function tSax(S) {
     prefix: function() {
       const tagName = this.tagName();
       return tagName && (prefixCache[tagName] || cachePrefix(tagName));
+    },
+
+    /**
+     * @returns {string|undefined} The processing instruction target, i.e. the
+     * "tag name" of a processing instruction. `undefined` if the current event
+     * is not a processing instruction.
+     */
+    piTarget: function() {
+      return piTargetEnd > 0 ? S.substring(tagNameStart, piTargetEnd) : undefined;
     },
 
     /**
