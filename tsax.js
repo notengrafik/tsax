@@ -15,8 +15,24 @@ const letterDCC = "D".charCodeAt(0);
  * EventType
  */
 
+/** @typedef {{[attributeName: string]: string}} Attributes */
+
+/**
+ * @typedef {{
+ *  next: () => EventType;
+ *  tagName: () => string | undefined;
+ *  localName: () => string | undefined;
+ *  prefix: () => string | undefined;
+ *  rawText: () => string | undefined;
+ *  attributes: () => Attributes | undefined | "error";
+ *  error: () => string | undefined;
+ *}}
+ * TSax
+ */
+
 /**
 * @param {string} S
+* @return TSax
 */
 function tSax(S) {
   let pos = 0;
@@ -49,7 +65,7 @@ function tSax(S) {
       lineNumber += 1;
     }
 
-    error = message + ` at ${lineNumber}:${errorPos - lineStartPos}`
+    error = message + ` at ${lineNumber + 1}:${errorPos - lineStartPos}`
     return "error";
   }
 
@@ -171,7 +187,7 @@ function tSax(S) {
      * This is the main method for interacting with TSax. It consumes the next
      * event from the XML string and returns the event type it found. Further
      * parsing of data belonging to this event is only done on request, using
-     * methods `tagName()`, `attributes()`, `text()` and so on. This makes
+     * methods `tagName()`, `attributes()`, `rawText()` and so on. This makes
      * processing very fast when one is only interested in accessing data of
      * some very specific events.
      *
@@ -220,7 +236,7 @@ function tSax(S) {
      *       break;
      *     case "text":
      *     case "cdata":
-     *       currentElement.children.push(tsax.text());
+     *       currentElement.children.push(tsax.rawText());
      *       break;
      *     case "error":
      *       throw new Error(tsax.error());
@@ -239,11 +255,11 @@ function tSax(S) {
      * more information about the event.
      *
      * * `"cdata"`: A CDATA node. Available methods:
-     *   * `text()`
+     *   * `rawText()`
      * * `"comment"`: A comment node. Available methods:
-     *   * `text()`
+     *   * `rawText()`
      * * `"doctype"`: A doctype declaration. Available methods:
-     *   * `text()`
+     *   * `rawText()`
      * * `"endTag"`: An closing tag. Available methods:
      *   * `localName()`
      *   * `prefix()`
@@ -252,7 +268,7 @@ function tSax(S) {
      * * `"error"`: An error occurred during parsing. Available methods:
      *   * `error()`
      * * `"processingInstruction"`: A processing instruction. Available methods:
-     *   * `text()`
+     *   * `rawText()`
      * * `"singleTag"`: A self closing tag. Available methods:
      *   * `attributes()`
      *   * `localName()`
@@ -261,7 +277,7 @@ function tSax(S) {
      * * `"startTag"`: A start tag. The same methods as for `"singleTag"` are
      *   available.
      * * `"text"`:  A text node. Available methods:
-     *   * `text()`
+     *   * `rawText()`
      */
      next: function next() {
       tagNameEnd = -1;
@@ -327,9 +343,9 @@ function tSax(S) {
     },
 
     /**
-     * @returns {{[attributeName: string]: string} | undefined | "error"} An
-     * object mapping attribute names to attribute values.  Attribute names
-     * include prefixes.
+     * @returns {Attributes | undefined | "error"} An object mapping attribute
+     * names to attribute values.  Attribute names include prefixes.  Namespace
+     * declarations are treated like regular attributes.
      *
      * Only available if the current event is `"singleTag"` or `"startTag"`,
      * otherwise returns `undefined`.
@@ -342,7 +358,7 @@ function tSax(S) {
         return undefined;
       }
 
-      /** @type {{[attributeName: string]: string}} */
+      /** @type {Attributes} */
       const attributes = {};
 
       if (tagEnd - tagNameEnd < 6) {
@@ -351,6 +367,7 @@ function tSax(S) {
         return attributes;
       }
 
+      // Rewind the cursor
       pos = tagNameEnd;
 
       while (true) {
