@@ -89,6 +89,11 @@ describe("TSax", function() {
     it("parses text", function() {
       assertNextState("foo<", "text", "foo");
     });
+
+    it("parses CDATA", function() {
+      assertNextState("<![CDATA[foo]]>", "cdata", "foo");
+      assertNextState("<![CDATA[]]>", "cdata", "");
+    });
   });
 
   describe("processing instructions", function() {

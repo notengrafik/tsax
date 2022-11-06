@@ -336,8 +336,8 @@ function tSax(S) {
               // Skip the 4 characters of '<!--
               return parseText("comment", 4, "-->");
             case openCornerBracketCC:
-              // Skip 8 characters of "<![CDATA["
-              return parseText("cdata", 8, "]]>");
+              // Skip 9 characters of "<![CDATA["
+              return parseText("cdata", 9, "]]>");
             case letterDCC:
               return parseDoctype();
             default:
