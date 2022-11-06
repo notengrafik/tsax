@@ -49,6 +49,10 @@ describe("TSax", function() {
   describe("tag parsing", function() {
     it("parses start tags and self closing tags", function() {
       assertNextState("<foo>", "startTag", "foo", {});
+      assertNextState("<a>", "startTag", "a", {});
+      assertNextState("<foo.bar>", "startTag", "foo.bar", {});
+      assertNextState("<foo-bar>", "startTag", "foo-bar", {});
+      assertNextState("<a/>", "singleTag", "a", {});
       assertNextState("<foo/>", "singleTag", "foo", {});
       assertNextState("<foo />", "singleTag", "foo", {});
       assertNextState("<foo\n/>", "singleTag", "foo", {});
@@ -67,6 +71,13 @@ describe("TSax", function() {
     it("parses end tags", function() {
       assertNextState("</foo>", "endTag", "foo");
       assertNextState("</bar >", "endTag", "bar");
+    });
+
+    it("reports missing closing brackets", function() {
+      assertNextState("<foo<", "error", undefined);
+      assertNextState("<foo", "error", undefined);
+      assertNextState("<foo /abc", "error", undefined);
+      assertNextState("</bar ", "error", undefined);
     });
   });
 

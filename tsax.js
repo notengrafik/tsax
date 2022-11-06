@@ -1,6 +1,7 @@
 // @ts-check
 
 const openBracketCC = "<".charCodeAt(0);
+const closeBracketCC = ">".charCodeAt(0);
 const minusCC = "-".charCodeAt(0);
 const slashCC = "/".charCodeAt(0);
 const exclamationCC = "!".charCodeAt(0);
@@ -135,17 +136,19 @@ function tSax(S) {
 
   function parseStartTag() {
     tagNameStart = pos + 1;
-    pos += 2;
-    while (" \n\t\r/>".indexOf(S[pos]) < 0) {
+    pos += 1;
+    let charCode;
+    do {
       pos += 1;
-    }
+      charCode = S.charCodeAt(pos);
+    } while (charCode > spaceCC && charCode !== closeBracketCC && charCode !== slashCC &&  pos < S.length)
     tagNameEnd = pos;
-    tagEnd = S.indexOf(">", pos);
-    pos = tagEnd + 1;
-    if (tagNameEnd < 0) {
+    tagEnd = S.indexOf(">", tagNameEnd);
+    if (tagEnd < 0) {
       return unexpectedEOF(tagNameStart, "'>'");
     }
-    return S[tagEnd - 1] === "/" ? "singleTag" : "startTag";
+    pos = tagEnd + 1;
+    return S.charCodeAt(tagEnd - 1) === slashCC ? "singleTag" : "startTag";
   }
 
   /**
@@ -386,7 +389,7 @@ function tSax(S) {
         const quote = firstCharOf(`"'`);
         const valueStart = pos + 1;
         const valueEnd = S.indexOf(quote, valueStart);
-        if (pos > S.length) {
+        if (pos >= S.length) {
           return unexpectedEOF(attributeStart, "attribute delimiters");
         }
         const attributeValue = S.substring(valueStart, valueEnd);
