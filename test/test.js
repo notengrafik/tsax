@@ -6,7 +6,10 @@ const {expect} = require("chai");
 /**
  * @param {import("../tsax").TSax|string} tsax
  * @param {import("../tsax").EventType} expectedEvent
- * @param {string} [expectedValue]  tagName or string value, depending on the event type
+ * @param {string|((value: string|undefined) => boolean)} [expectedValue]
+ * tagName or string value, depending on the event type. If a function is
+ * supplied and if the actual value is passed to it, it must return `true` when
+ * the value is as expected and `false` otherwise.
  * @param {import("../tsax").Attributes|undefined|string} [expectedProperties]
  */
 function assertNextState(tsax, expectedEvent, expectedValue, expectedProperties) {
@@ -20,11 +23,14 @@ function assertNextState(tsax, expectedEvent, expectedValue, expectedProperties)
     throw actualEvent === "error" ? new Error(tsax.error()) : e
   }
   const actualAttributes = tsax.attributes();
+
+  let actualValue = undefined;
+
   switch (expectedEvent) {
     case "endTag":
     case "singleTag":
     case "startTag":
-      expect(tsax.tagName()).to.equal(expectedValue);
+      actualValue = tsax.tagName();
       if (actualAttributes === "error" && expectedProperties !== "error") {
         throw new Error(tsax.error());
       }
@@ -33,13 +39,31 @@ function assertNextState(tsax, expectedEvent, expectedValue, expectedProperties)
     case "eof":
       break;
     case "processingInstruction":
-      expect(tsax.piTarget()).to.equal(expectedValue);
-      expect(tsax.rawText()).to.equal(expectedProperties);
-      return;
+      actualValue = tsax.piTarget();
+      break;
     default:
-      expect(tsax.rawText()).to.equal(expectedValue);
+      actualValue = tsax.rawText();
   }
-  expect(actualAttributes).to.deep.equal(expectedProperties);
+
+  if (expectedEvent === "processingInstruction") {
+    expect(tsax.rawText()).to.equal(expectedProperties);
+  } else {
+    expect(actualAttributes).to.deep.equal(expectedProperties);
+  }
+
+  if (typeof expectedValue === "function") {
+    expect(expectedValue(actualValue)).to.equal(true);
+  } else {
+    expect(actualValue).to.equal(expectedValue);
+  }
+}
+
+/**
+ * @param {string|undefined} s
+ * @returns boolean
+ */
+function whitespace(s) {
+  return s?.trim() === ""
 }
 
 
@@ -126,6 +150,30 @@ describe("TSax", function() {
         <!ENTITY x SYSTEM '013.ent'>
       ]`;
       assertNextState(`<!DOCTYPE ${doctype}>`, "doctype", doctype);
+    });
+  });
+
+  describe("complex documents", function() {
+    it("parses text inside tags", function() {
+      const tsax = tSax(`<a>b</a>`);
+      assertNextState(tsax, "startTag", "a", {});
+      assertNextState(tsax, "text", "b");
+      assertNextState(tsax, "endTag", "a");
+      assertNextState(tsax, "eof");
+    });
+
+    it("parses <respStmt> example", function() {
+      const tsax = tSax(`<respStmt xml:id="m-11" xmlns="http://www.music-encoding.org/ns/mei">
+        <persName xml:id="m-12">Max Mustermann</persName>
+      </respStmt>`);
+      assertNextState(tsax, "startTag", "respStmt", {"xml:id": "m-11", "xmlns": "http://www.music-encoding.org/ns/mei"});
+      assertNextState(tsax, "text", whitespace);
+      assertNextState(tsax, "startTag", "persName", {"xml:id": "m-12"});
+      assertNextState(tsax, "text", "Max Mustermann");
+      assertNextState(tsax, "endTag", "persName");
+      assertNextState(tsax, "text", whitespace);
+      assertNextState(tsax, "endTag", "respStmt");
+      assertNextState(tsax, "eof");
     });
   });
 });

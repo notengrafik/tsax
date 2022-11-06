@@ -1,7 +1,6 @@
 // @ts-check
 
 const openBracketCC = "<".charCodeAt(0);
-const closeBracketCC = ">".charCodeAt(0);
 const minusCC = "-".charCodeAt(0);
 const slashCC = "/".charCodeAt(0);
 const exclamationCC = "!".charCodeAt(0);
@@ -137,7 +136,7 @@ function tSax(S) {
   function parseText(type, skip, end) {
     textStart = pos + skip;
     textEnd = S.indexOf(end, textStart);
-    pos = textEnd + end.length;
+    pos = textEnd;
     return textEnd > 0 ? type : unexpectedEOF(textStart, end);
   }
 
