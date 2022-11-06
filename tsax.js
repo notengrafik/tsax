@@ -7,6 +7,7 @@ const exclamationCC = "!".charCodeAt(0);
 const questionCC = "?".charCodeAt(0);
 const openCornerBracketCC = "[".charCodeAt(0);
 const letterDCC = "D".charCodeAt(0);
+const spaceCC = " ".charCodeAt(0);
 
 
 /**
@@ -121,11 +122,15 @@ function tSax(S) {
   function parseEndTag() {
     tagNameStart = pos + 2;
     tagNameEnd = S.indexOf(">", pos);
+    if (tagNameEnd < 0) {
+      return unexpectedEOF(tagNameStart, "'>'");
+    }
     pos = tagNameEnd + 1;
-    while (" \n\t\r".indexOf(S[tagNameEnd - 1]) > 0) {
+    // All other whitespace character codes are smaller than that of space (" ")
+    while (S.charCodeAt(tagNameEnd - 1) <= spaceCC) {
       tagNameEnd -= 1;
     }
-    return tagNameEnd > 0 ? "endTag" : unexpectedEOF(tagNameStart, "'>'");
+    return "endTag";
   }
 
   function parseStartTag() {

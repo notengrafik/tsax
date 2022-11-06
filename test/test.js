@@ -63,6 +63,11 @@ describe("TSax", function() {
       assertNextState("<bar foo  =  'baz' />", "singleTag", "bar", {foo: "baz"});
       assertNextState("<bar foo\n=\n'baz' />", "singleTag", "bar", {foo: "baz"});
     });
+
+    it("parses end tags", function() {
+      assertNextState("</foo>", "endTag", "foo");
+      assertNextState("</bar >", "endTag", "bar");
+    });
   });
 
 });
