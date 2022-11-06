@@ -175,5 +175,12 @@ describe("TSax", function() {
       assertNextState(tsax, "endTag", "respStmt");
       assertNextState(tsax, "eof");
     });
+
+    it("parses comments in context", function() {
+      const tsax = tSax("<outer><!--<inner>commented out</inner>--></outer>");
+      assertNextState(tsax, "startTag", "outer", {});
+      assertNextState(tsax, "comment", "<inner>commented out</inner>");
+      assertNextState(tsax, "endTag", "outer");
+    });
   });
 });

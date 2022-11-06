@@ -133,10 +133,10 @@ function tSax(S) {
    * @param {string} end  String that ends the text, e.g. '-->' for comment
    * @returns {"cdata"|"comment"|"error"|"processingInstruction"|"text"}
    */
-  function parseText(type, skip, end) {
+  function parseText(type, skip, skipEnd, end) {
     textStart = pos + skip;
     textEnd = S.indexOf(end, textStart);
-    pos = textEnd;
+    pos = textEnd + skipEnd;
     return textEnd > 0 ? type : unexpectedEOF(textStart, end);
   }
 
@@ -332,7 +332,7 @@ function tSax(S) {
         // not really an error for text nodes. We just reached the end of file.
         // The final closing tag may be followed by a text node with only
         // whitespace (which we don't check).
-        return parseText("text", 0, "<") === "error" ? "eof" : "text";
+        return parseText("text", 0, 0, "<") === "error" ? "eof" : "text";
       }
       switch (S.charCodeAt(pos + 1)) {
         case slashCC:
@@ -343,10 +343,10 @@ function tSax(S) {
           switch (S.charCodeAt(pos + 2)) {
             case minusCC:
               // Skip the 4 characters of '<!--
-              return parseText("comment", 4, "-->");
+              return parseText("comment", 4, 3, "-->");
             case openCornerBracketCC:
               // Skip 9 characters of "<![CDATA["
-              return parseText("cdata", 9, "]]>");
+              return parseText("cdata", 9, 3, "]]>");
             case letterDCC:
               return parseDoctype();
             default:
