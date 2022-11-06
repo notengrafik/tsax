@@ -63,11 +63,12 @@ function tSax(S) {
   const prefixCache = {};
 
   /**
-  * @param {number} errorPos
-  * @param {string} message
-  * @returns {"error"}
-  */
-  function err(errorPos, message) {
+   * Only to be used in the error case as the calculation is pretty expensive
+   * for large files.
+   * @param {number} errorPos
+   * @returns string
+   */
+  function humanReadablePos(errorPos) {
     let lineNumber = 0;
     let pos = 0;
     let lineStartPos = 0;
@@ -78,7 +79,16 @@ function tSax(S) {
       lineNumber += 1;
     }
 
-    error = message + ` at ${lineNumber + 1}:${errorPos - lineStartPos}`
+    return `${lineNumber + 1}:${errorPos - lineStartPos + 1}`;
+  }
+
+  /**
+  * @param {number} errorPos
+  * @param {string} message
+  * @returns {"error"}
+  */
+  function err(errorPos, message) {
+    error = message + ` at ${humanReadablePos(errorPos)}`
     return "error";
   }
 
