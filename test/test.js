@@ -81,4 +81,9 @@ describe("TSax", function() {
     });
   });
 
+  describe("text parrsing", function() {
+    it("parses text", function() {
+      assertNextState("foo<", "text", "foo");
+    });
+  });
 });
