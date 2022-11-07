@@ -109,7 +109,7 @@ describe("TSax", function() {
     });
   });
 
-  describe("text parrsing", function() {
+  describe("text parsing", function() {
     it("parses text", function() {
       assertNextState("foo<", "text", "foo");
     });
@@ -117,6 +117,12 @@ describe("TSax", function() {
     it("parses CDATA", function() {
       assertNextState("<![CDATA[foo]]>", "cdata", "foo");
       assertNextState("<![CDATA[]]>", "cdata", "");
+    });
+
+    it("ignores text after final element", function() {
+      const tsax = tSax("<a/> ");
+      assertNextState(tsax, "singleTag", "a", {});
+      assertNextState(tsax, "eof");
     });
   });
 
@@ -176,11 +182,25 @@ describe("TSax", function() {
       assertNextState(tsax, "eof");
     });
 
+    it("parses self closing elements in context", function() {
+      const tsax = tSax("<a><b/></a>");
+      assertNextState(tsax, "startTag", "a", {});
+      assertNextState(tsax, "singleTag", "b", {});
+      assertNextState(tsax, "endTag", "a");
+    });
+
     it("parses comments in context", function() {
       const tsax = tSax("<outer><!--<inner>commented out</inner>--></outer>");
       assertNextState(tsax, "startTag", "outer", {});
       assertNextState(tsax, "comment", "<inner>commented out</inner>");
       assertNextState(tsax, "endTag", "outer");
+    });
+
+    it("parses xml declaration and doctype in context", function() {
+      const tsax = tSax('<?xml version="1.0"?><!DOCTYPE foo><bar/>');
+      assertNextState(tsax, "processingInstruction", "xml", 'version="1.0"');
+      assertNextState(tsax, "doctype", "foo");
+      assertNextState(tsax, "singleTag", "bar", {});
     });
   });
 });
