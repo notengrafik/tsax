@@ -39,8 +39,8 @@ function charCodeMap(string) {
  *  localName: () => string | undefined;
  *  prefix: () => string | undefined;
  *  piTarget: () => string | undefined;
- *  rawText: () => string | undefined;
- *  attributes: () => Attributes | undefined | "error";
+ *  text: (raw?: boolean) => string | undefined;
+ *  attributes: (raw?: boolean) => Attributes | undefined | "error";
  *  error: () => string | undefined;
  *}}
  * TSax
@@ -59,6 +59,7 @@ function tSax(S) {
   let textEnd = -1;
   let piTargetEnd = -1;
   let hasAttributes = false;
+  let textIsEscaped = false;
   /** @type {string|undefined} */
   let error = undefined;
 
@@ -66,6 +67,14 @@ function tSax(S) {
   const localNameCache = {};
   /** @type {{[tagName: string]: string}} */
   const prefixCache = {};
+  /** @type {{[entity: string]: string}} */
+  const entityCache = {
+    lt: "<",
+    gt: ">",
+    amp: "&",
+    quot: '"',
+    apos: "'",
+  };
 
   /**
    * Only to be used in the error case as the calculation is pretty expensive
@@ -235,6 +244,62 @@ function tSax(S) {
     return prefix;
   }
 
+  /**
+   * @param {string} entity
+   * @returns {string|undefined}  Unescaped entity. `undefined` if the entity
+   * was malformed.
+   */
+  function cacheEntity(entity) {
+    // We know we have a numeric entity, because the other entities that XML
+    // knows are already in the cache by default.
+    const isHex = entity.charCodeAt(1) === letterxCC;
+    const charCode = isHex
+      ? parseInt(entity.substring(2), 16)
+      : parseInt(entity.substring(1), 10);
+    if (isNaN(charCode)) {
+      return undefined;
+    }
+    const char = String.fromCharCode(charCode);
+    entityCache[entity] = char;
+    return char;
+  }
+
+
+  /**
+   * @param {string} rawText
+   * @returns {string|undefined}  `undefined` is returned when there's a
+   * problem with unescaping.  In that case, en error message is set.
+   */
+  function unescapeText(rawText) {
+    let ampIndex = rawText ? rawText.indexOf("&") : -1;
+    if (!rawText || ampIndex < 0) {
+      return rawText;
+    }
+
+    let semicolonIndex = -1;
+    let text = "";
+
+    while (ampIndex >= 0) {
+      text += rawText.substring(semicolonIndex + 1, ampIndex);
+      semicolonIndex = rawText.indexOf(";", ampIndex + 2);
+      if (semicolonIndex < 0) {
+        err(textStart + ampIndex + 2, "Missing semicolon");
+      }
+      const entity = rawText.substring(ampIndex + 1, semicolonIndex);
+      const resolved = entityCache[entity] || cacheEntity(entity);
+      if (!resolved) {
+        err(textStart + semicolonIndex, `Unresolveable entity "${entity}"`);
+        return undefined;
+      }
+      text += resolved;
+
+      ampIndex = rawText.indexOf("&", semicolonIndex + 1);
+    }
+
+    return text + rawText.substring(semicolonIndex + 1);
+  }
+
+
   return {
     /**
      * This is the main method for interacting with TSax. It consumes the next
@@ -337,12 +402,14 @@ function tSax(S) {
       textEnd = -1;
       piTargetEnd = -1;
       hasAttributes = false;
+      textIsEscaped = false;
 
       if (S.charCodeAt(pos) !== openBracketCC) {
         // When there is an error scanning for "<" (i.e. no "<" found), this is
         // not really an error for text nodes. We just reached the end of file.
         // The final closing tag may be followed by a text node with only
         // whitespace (which we don't check).
+        textIsEscaped = true;
         return parseText("text", 0, 0, "<") === "error" ? "eof" : "text";
       }
       switch (S.charCodeAt(pos + 1)) {
@@ -364,6 +431,8 @@ function tSax(S) {
               return err(pos, `Unexpected character sequence ${S.substring(pos, pos + 3)}`);
           }
       }
+      // Set the escaping flag because attributes are escaped
+      textIsEscaped = true;
       return parseStartTag();
     },
 
@@ -395,17 +464,27 @@ function tSax(S) {
       return piTargetEnd > 0 ? S.substring(tagNameStart, piTargetEnd) : undefined;
     },
 
-    /**
-    * @returns {string|undefined}  Verbatim XML text, entites not resolved.
+    /***
     * Only available if the current event is `"cdata"`, `"comment"`,
     * `"doctype"`, `"processingInstruction"`, or `"text"`. Otherwise,
     * `undefined` is returned.
+    * @param {boolean} [raw]  If `true`, will return XML text verbatim. If
+    * falsy, entities will be resolved.
+    * @returns {string|undefined}  If there was a problem resolving entities,
+    * `undefined` is returned and an error message can be retrieved with
+    * `error()`.
     */
-    rawText: function() {
-      return textEnd > 0 ? S.substring(textStart, textEnd) : undefined;
+    text: function(raw) {
+      if (textEnd < 0) {
+        return undefined;
+      }
+      const rawText = S.substring(textStart, textEnd);
+      return raw ||  !textIsEscaped ? rawText : unescapeText(rawText);
     },
 
     /**
+     * @param {boolean} [raw]  If `true`, will return attribute values varbatim.
+     * If falsy, entities will be resolved.
      * @returns {Attributes | undefined | "error"} An object mapping attribute
      * names to attribute values.  Attribute names include prefixes.  Namespace
      * declarations are treated like regular attributes.
@@ -416,7 +495,7 @@ function tSax(S) {
      * If an error occurs during attribute parsing, returns `"error"`. To get
      * the error message, use the `error()` method.
      */
-    attributes: function() {
+    attributes: function(raw) {
       if (!hasAttributes) {
         return undefined;
       }
@@ -436,21 +515,29 @@ function tSax(S) {
       while (true) {
         const attributeStart = pos + 1;
 
-        if (firstCharOf(">=") === ">") {
+        if (S.charCodeAt(posOfFirst(attributeNameEndChars)) === closeBracketCC) {
           pos += 1;
           return attributes;
         }
 
         // Found "=" at pos
         const attributeName = S.substring(attributeStart, pos).trim();
-        const quote = firstCharOf(`"'`);
-        const valueStart = pos + 1;
+        const valueStart = posOfFirst(quoteChars) + 1;
+        const quote = S[valueStart - 1];
         const valueEnd = S.indexOf(quote, valueStart);
         if (pos >= S.length) {
           return unexpectedEOF(attributeStart, "attribute delimiters");
         }
-        const attributeValue = S.substring(valueStart, valueEnd);
-        attributes[attributeName] = attributeValue;
+        const rawValue = S.substring(valueStart, valueEnd);
+        if (raw) {
+          attributes[attributeName] = rawValue;
+        } else {
+          const value = unescapeText(rawValue);
+          if (value === undefined) {
+            return undefined
+          }
+          attributes[attributeName] = value;
+        }
 
         pos = valueEnd + 1;
       }

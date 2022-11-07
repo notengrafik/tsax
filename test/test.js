@@ -45,13 +45,13 @@ function assertNextState(tsax, expectedEvent, expectedValue, expectedProperties)
       actualValue = tsax.tagName();
       break;
     default:
-      actualValue = tsax.rawText();
+      actualValue = tsax.text();
   }
 
   switch (expectedEvent) {
     case "processingInstruction":
     case "doctype":
-      expect(tsax.rawText()).to.equal(expectedProperties, "doctype/processing instruction raw text");
+      expect(tsax.text()).to.equal(expectedProperties, "doctype/processing instruction raw text");
       break;
     default:
       expect(actualAttributes).to.deep.equal(expectedProperties, "attributes");
@@ -64,7 +64,7 @@ function assertNextState(tsax, expectedEvent, expectedValue, expectedProperties)
   }
 
   return {
-    escapedText: (expectedText) => expect(/** @type import("../tsax").TSax */ (tsax).escapedText()).to.equal(expectedText),
+    rawText: (expectedText) => expect(/** @type import("../tsax").TSax */ (tsax).text(true)).to.equal(expectedText),
   }
 }
 
@@ -82,6 +82,7 @@ describe("TSax", function() {
     assertNextState("<!--foo-->", "comment", "foo");
     assertNextState("<!--foo", "error");
     assertNextState("<!--bar--->", "comment", "bar-");
+    assertNextState("<!--&amp;-->", "comment", "&amp;");
   });
 
   describe("tag parsing", function() {
@@ -104,6 +105,16 @@ describe("TSax", function() {
       assertNextState("<fooBar>", "startTag", "fooBar", {});
       assertNextState("<bar foo  =  'baz' />", "singleTag", "bar", {foo: "baz"});
       assertNextState("<bar foo\n=\n'baz' />", "singleTag", "bar", {foo: "baz"});
+    });
+
+    it("resolves entities in attributes", function() {
+      assertNextState("<foo bar='&lt;'>", "startTag", "foo", {bar: "<"});
+    });
+
+    it("can access raw unresolved attribute values", function() {
+      let tsax = tSax("<foo bar='&lt;'>");
+      tsax.next();
+      expect(tsax.attributes(true)).to.deep.equal({bar: "&lt;"});
     });
 
     it("parses end tags", function() {
@@ -136,10 +147,11 @@ describe("TSax", function() {
     });
 
     it("resolves entities", function() {
-      assertNextState("&amp;123<", "text", "&amp;123").escapedText("&123");
-      assertNextState("abc&gt;<;", "text", "abc&gt;").escapedText("abc>");
-      assertNextState("&#x20;<", "text", "&#x20;").escapedText(" ");
-      assertNextState("&#32;<", "text", "&#32;").escapedText(" ");
+      assertNextState("&amp;123<", "text", "&123").rawText("&amp;123");
+      assertNextState("abc&gt;<;", "text", "abc>").rawText("abc&gt;");
+      assertNextState("&#x20;<", "text", " ").rawText("&#x20;");
+      assertNextState("&#32;<", "text", " ").rawText("&#32;");
+      assertNextState("&lt;&gt;<", "text", "<>").rawText("&lt;&gt;");
     });
   });
 
@@ -245,3 +257,52 @@ describe("TSax", function() {
     });
   });
 });
+
+// describe("example", function() {
+//   it("works", function() {
+//     /** @typedef {{children: (string|Node)[], tagName?: string, attributes?: import("../tsax").Attributes}} Node */
+//     const tsax = tSax("<foo a='1'>bar</foo>");
+
+//     /** @type Node */
+//     let currentElement = {children: []};
+//     /** @type Node[] */
+//     const elementStack = [];
+
+//     while (true) {
+//       switch (tsax.next()) {
+//         case "startTag":
+//           const element = {
+//             tagName: tsax.tagName(),
+//             attributes: tsax.attributes(),
+//             children: [],
+//           };
+//           if (element.attributes === "error") {
+//             throw new Error(tsax.error());
+//           }
+//           currentElement = /** @type Node */ (element);
+//           currentElement.children?.push(currentElement);
+//           elementStack.push(currentElement);
+//           break;
+//         case "endTag":
+//           if (elementStack.length < 1) {
+//             throw new Error("Too many closing tags");
+//           }
+//           currentElement = /** @type Node */ (elementStack.pop());
+//           break;
+//         case "text":
+//         case "cdata":
+//           currentElement.children.push(tsax.rawText() || "");
+//           break;
+//         case "error":
+//           throw new Error(tsax.error());
+//         case "eof":
+//           if (elementStack.length !== 1) {
+//             throw new Error("Missing closing tags");
+//           }
+//           // The root node only has one child, the root element.
+//           return currentElement.children[0];
+//         }
+//       }
+//     }
+//   });
+// });
