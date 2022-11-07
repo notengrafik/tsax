@@ -8,10 +8,10 @@ const questionCC = "?".charCodeAt(0);
 const openCornerBracketCC = "[".charCodeAt(0);
 const letterDCC = "D".charCodeAt(0);
 const spaceCC = " ".charCodeAt(0);
-const nameEndMap = (() => {
+const isNameEnd = (() => {
   /** @type Array.<true|undefined> Maps char codes that end a name to `true`*/
   const nameEndMap = [];
-  const chars = [..." \t\n\r/>?"];
+  const chars = [..." \t\n\r/>?["];
   for (const char of chars) {
     nameEndMap[char.charCodeAt(0)] = true;
   }
@@ -53,6 +53,7 @@ function tSax(S) {
   let textStart = -1;
   let textEnd = -1;
   let piTargetEnd = -1;
+  let hasAttributes = false;
   /** @type {string|undefined} */
   let error = undefined;
 
@@ -103,17 +104,27 @@ function tSax(S) {
   function parseDoctype() {
     // Skip the 10 characters of '<!DOCTYPE '
     pos += 10;
-    textStart = pos;
-    // We have to skip any '<!ELEMENT>' and '<!ENTITY>' declarations.
-    // We do this by counting opening and closing '<' and '>' brackets.
-    // Initially, we have 1 open bracket from '<!DOCTYPE ':
+    tagNameStart = pos;
+    tagNameEnd = parseName();
+    // We have to skip any '<!ELEMENT>', '<!ENTITY>', '<!ATTLIST>' or
+    // '<!NOTATION>' declarations. We do this by counting opening and closing
+    // '<' and '>' brackets. Initially, we have 1 open bracket from
+    // '<!DOCTYPE ':
     let bracketCount = 1;
     // TODO: Register any entity declarations for entity resolution.
 
     do {
       switch (S[pos]) {
         case "<":
-          bracketCount += 1;
+          if (S[pos + 1] === "?") {
+            // Parsing a processing instruction inside this will mess with our
+            // positions, so back them up and restore them
+            const positionBackup = [tagNameStart, tagNameEnd];
+            parseProcessingInstruction();
+            [tagNameStart, tagNameEnd] = positionBackup;
+          } else {
+            bracketCount += 1;
+          }
           break;
         case ">":
           bracketCount -= 1;
@@ -122,6 +133,7 @@ function tSax(S) {
       pos += 1;
     } while (bracketCount > 0 && pos < S.length)
 
+    textStart = tagNameEnd;
     textEnd = pos - 1;
     return bracketCount === 0 ? "doctype" : unexpectedEOF(textStart, "doctype end")
   }
@@ -163,6 +175,7 @@ function tSax(S) {
       return unexpectedEOF(tagNameStart, "'>'");
     }
     pos = tagEnd + 1;
+    hasAttributes = true;
     return S.charCodeAt(tagEnd - 1) === slashCC ? "singleTag" : "startTag";
   }
 
@@ -183,7 +196,7 @@ function tSax(S) {
   function parseName() {
     do {
       pos += 1;
-    } while (!nameEndMap[S.charCodeAt(pos)] && pos < S.length)
+    } while (!isNameEnd[S.charCodeAt(pos)] && pos < S.length)
     return pos;
   }
 
@@ -324,8 +337,8 @@ function tSax(S) {
      next: function next() {
       tagNameEnd = -1;
       textEnd = -1;
-      tagEnd = -1;
       piTargetEnd = -1;
+      hasAttributes = false;
 
       if (S.charCodeAt(pos) !== openBracketCC) {
         // When there is an error scanning for "<" (i.e. no "<" found), this is
@@ -406,7 +419,7 @@ function tSax(S) {
      * the error message, use the `error()` method.
      */
     attributes: function() {
-      if (tagEnd < 0) {
+      if (!hasAttributes) {
         return undefined;
       }
 

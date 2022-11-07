@@ -18,7 +18,7 @@ function assertNextState(tsax, expectedEvent, expectedValue, expectedProperties)
   }
   const actualEvent = tsax.next();
   try {
-    expect(actualEvent).to.equal(expectedEvent);
+    expect(actualEvent).to.equal(expectedEvent, "event type");
   } catch (e) {
     throw actualEvent === "error" ? new Error(tsax.error()) : e
   }
@@ -41,20 +41,26 @@ function assertNextState(tsax, expectedEvent, expectedValue, expectedProperties)
     case "processingInstruction":
       actualValue = tsax.piTarget();
       break;
+    case "doctype":
+      actualValue = tsax.tagName();
+      break;
     default:
       actualValue = tsax.rawText();
   }
 
-  if (expectedEvent === "processingInstruction") {
-    expect(tsax.rawText()).to.equal(expectedProperties);
-  } else {
-    expect(actualAttributes).to.deep.equal(expectedProperties);
+  switch (expectedEvent) {
+    case "processingInstruction":
+    case "doctype":
+      expect(tsax.rawText()).to.equal(expectedProperties, "doctype/processing instruction raw text");
+      break;
+    default:
+      expect(actualAttributes).to.deep.equal(expectedProperties, "attributes");
   }
 
   if (typeof expectedValue === "function") {
-    expect(expectedValue(actualValue)).to.equal(true);
+    expect(expectedValue(actualValue)).to.equal(true, "text content of text/cdata, or tag name");
   } else {
-    expect(actualValue).to.equal(expectedValue);
+    expect(actualValue).to.equal(expectedValue, "text content of text/cdata, or tag name");
   }
 }
 
@@ -140,13 +146,13 @@ describe("TSax", function() {
 
   describe("doctype", function() {
     it("parses doctype", function() {
-      assertNextState("<!DOCTYPE html>", "doctype", "html");
-      const musicXmlDoctype = 'score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd"';
-      assertNextState(`<!DOCTYPE ${musicXmlDoctype}>`, "doctype", musicXmlDoctype);
+      assertNextState("<!DOCTYPE html>", "doctype", "html", "");
+      const musicXmlDoctype = ' PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd"';
+      assertNextState(`<!DOCTYPE score-partwise${musicXmlDoctype}>`, "doctype", "score-partwise", musicXmlDoctype);
     });
 
     it("parses doctype with ELEMENT, ATTLIST and ENTITY children", function() {
-      const doctype = `doc [
+      const doctype = ` [
         <!ELEMENT doc (e)>
         <!ELEMENT e (#PCDATA)>
         <!ATTLIST e
@@ -155,7 +161,15 @@ describe("TSax", function() {
         >
         <!ENTITY x SYSTEM '013.ent'>
       ]`;
-      assertNextState(`<!DOCTYPE ${doctype}>`, "doctype", doctype);
+      assertNextState(`<!DOCTYPE doc${doctype}>`, "doctype", "doc", doctype);
+    });
+
+    it("ignores processing instructions inside doctype", function() {
+      const tsax = tSax("<!DOCTYPE foo:bar[<?baz >>><<<<?>]>");
+      assertNextState(tsax, "doctype", "foo:bar", "[<?baz >>><<<<?>]");
+      expect(tsax.prefix()).to.equal("foo");
+      expect(tsax.localName()).to.equal("bar");
+      assertNextState(tsax, "eof");
     });
   });
 
@@ -215,7 +229,7 @@ describe("TSax", function() {
     it("parses xml declaration and doctype in context", function() {
       const tsax = tSax('<?xml version="1.0"?><!DOCTYPE foo><bar/>');
       assertNextState(tsax, "processingInstruction", "xml", 'version="1.0"');
-      assertNextState(tsax, "doctype", "foo");
+      assertNextState(tsax, "doctype", "foo", "");
       assertNextState(tsax, "singleTag", "bar", {});
     });
   });
