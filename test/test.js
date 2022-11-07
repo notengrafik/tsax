@@ -168,6 +168,22 @@ describe("TSax", function() {
       assertNextState(tsax, "eof");
     });
 
+    it("parses text after cdata", function() {
+      const tsax = tSax("<a><![CDATA[b]]>c</a>");
+      assertNextState(tsax, "startTag", "a", {});
+      assertNextState(tsax, "cdata", "b");
+      assertNextState(tsax, "text", "c");
+      assertNextState(tsax, "endTag", "a");
+    });
+
+    it("parses cdata after text", function() {
+      const tsax = tSax("<a>b<![CDATA[c]]></a>");
+      assertNextState(tsax, "startTag", "a", {});
+      assertNextState(tsax, "text", "b");
+      assertNextState(tsax, "cdata", "c");
+      assertNextState(tsax, "endTag", "a");
+    });
+
     it("parses <respStmt> example", function() {
       const tsax = tSax(`<respStmt xml:id="m-11" xmlns="http://www.music-encoding.org/ns/mei">
         <persName xml:id="m-12">Max Mustermann</persName>
