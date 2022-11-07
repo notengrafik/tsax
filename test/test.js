@@ -62,6 +62,10 @@ function assertNextState(tsax, expectedEvent, expectedValue, expectedProperties)
   } else {
     expect(actualValue).to.equal(expectedValue, "text content of text/cdata, or tag name");
   }
+
+  return {
+    escapedText: (expectedText) => expect(/** @type import("../tsax").TSax */ (tsax).escapedText()).to.equal(expectedText),
+  }
 }
 
 /**
@@ -129,6 +133,13 @@ describe("TSax", function() {
       const tsax = tSax("<a/> ");
       assertNextState(tsax, "singleTag", "a", {});
       assertNextState(tsax, "eof");
+    });
+
+    it("resolves entities", function() {
+      assertNextState("&amp;123<", "text", "&amp;123").escapedText("&123");
+      assertNextState("abc&gt;<;", "text", "abc&gt;").escapedText("abc>");
+      assertNextState("&#x20;<", "text", "&#x20;").escapedText(" ");
+      assertNextState("&#32;<", "text", "&#32;").escapedText(" ");
     });
   });
 
