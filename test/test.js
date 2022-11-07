@@ -6,11 +6,12 @@ const {expect} = require("chai");
 /**
  * @param {import("../tsax").TSax|string} tsax
  * @param {import("../tsax").EventType} expectedEvent
- * @param {string|((value: string|undefined) => boolean)} [expectedValue]
+ * @param {string | ((value: string | undefined) => boolean)} [expectedValue]
  * tagName or string value, depending on the event type. If a function is
  * supplied and if the actual value is passed to it, it must return `true` when
  * the value is as expected and `false` otherwise.
- * @param {import("../tsax").Attributes|undefined|string} [expectedProperties]
+ * @param {import("../tsax").Attributes | undefined | string}
+ * [expectedProperties]
  */
 function assertNextState(tsax, expectedEvent, expectedValue, expectedProperties) {
   if (typeof tsax === "string") {
@@ -64,8 +65,10 @@ function assertNextState(tsax, expectedEvent, expectedValue, expectedProperties)
   }
 
   return {
-    rawText: (expectedText) => expect(/** @type import("../tsax").TSax */ (tsax).text(true)).to.equal(expectedText),
-  }
+    rawText: function (expectedText) {
+      return expect(/** @type import("../tsax").TSax */ (tsax).text(true)).to.equal(expectedText);
+    },
+  };
 }
 
 /**

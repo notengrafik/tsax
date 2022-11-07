@@ -14,15 +14,17 @@ const nameEndChars = charCodeMap(" \t\n\r/>?[");
 const quoteChars = charCodeMap(`"'`);
 const attributeNameEndChars = charCodeMap("=>");
 
+/**
+ * @param {string} string  A string of all chars that should be mapped.
+ */
 function charCodeMap(string) {
-  /** @type Array.<true|undefined> Maps char codes that end a name to `true`*/
+  /** @type {Array.<true|undefined>} Maps char codes that end a name to `true`*/
   const charMap = [];
-  for (const char of [...string]) {
+  for (const char of string.split("")) {
     charMap[char.charCodeAt(0)] = true;
   }
   return charMap;
 }
-
 
 /**
  * @typedef
@@ -48,7 +50,6 @@ function charCodeMap(string) {
 
 /**
 * @param {string} S
-* @return TSax
 */
 function tSax(S) {
   let pos = 0;
@@ -58,7 +59,10 @@ function tSax(S) {
   let textStart = -1;
   let textEnd = -1;
   let piTargetEnd = -1;
-  let hasAttributes = false;
+  let mightHaveAttributes = false;
+  /** Set to `true` if we're in text nodes where we need to account for escaped
+   * text, or in element tags where attributes might contain entity escapes.
+   */
   let textIsEscaped = false;
   /** @type {string|undefined} */
   let error = undefined;
@@ -97,22 +101,25 @@ function tSax(S) {
   }
 
   /**
-  * @param {number} errorPos
-  * @param {string} message
-  * @returns {"error"}
-  */
+   * @param {number} errorPos
+   * @param {string} message
+   * @returns {"error"}
+   */
   function err(errorPos, message) {
-    error = message + ` at ${humanReadablePos(errorPos)}`
+    error = message + ` at ${humanReadablePos(errorPos)}`;
     return "error";
   }
 
   /**
-  * @param {number} errorPos
-  * @param {string} scanningFor
-  * @returns {"error"}
-  */
+   * @param {number} errorPos
+   * @param {string} scanningFor
+   * @returns {"error"}
+   */
   function unexpectedEOF(errorPos, scanningFor) {
-    return err(errorPos, "Unexpected end of file while scanning for " + scanningFor);
+    return err(
+      errorPos,
+      "Unexpected end of file while scanning for " + scanningFor
+    );
   }
 
   function parseDoctype() {
@@ -145,13 +152,14 @@ function tSax(S) {
           break;
       }
       pos += 1;
-    } while (bracketCount > 0 && pos < S.length)
+    } while (bracketCount > 0 && pos < S.length);
 
     textStart = tagNameEnd;
     textEnd = pos - 1;
-    return bracketCount === 0 ? "doctype" : unexpectedEOF(textStart, "doctype end")
+    return bracketCount === 0
+      ? "doctype"
+      : unexpectedEOF(textStart, "doctype end");
   }
-
 
   /**
    * @param {"cdata"|"comment"|"text"} type
@@ -192,7 +200,7 @@ function tSax(S) {
       return unexpectedEOF(tagNameStart, "'>'");
     }
     pos = tagEnd + 1;
-    hasAttributes = true;
+    mightHaveAttributes = true;
     return S.charCodeAt(tagEnd - 1) === slashCC ? "singleTag" : "startTag";
   }
 
@@ -267,7 +275,6 @@ function tSax(S) {
     return char;
   }
 
-
   /**
    * @param {string} rawText
    * @returns {string|undefined}  `undefined` is returned when there's a
@@ -302,10 +309,9 @@ function tSax(S) {
     return text + rawText.substring(semicolonIndex + 1);
   }
 
-
   return {
     /**
-     * This is the main method for interacting with TSax. It consumes the next
+     * This is the main method for interacting with tSax. It consumes the next
      * event from the XML string and returns the event type it found. Further
      * parsing of data belonging to this event is only done on request, using
      * methods `tagName()`, `attributes()`, `rawText()` and so on. This makes
@@ -314,7 +320,7 @@ function tSax(S) {
      *
      * @example <caption>Looking for the next occurrence of a `<foo>`
      * element</caption>
-     * const tsax = TSax(xmlString);
+     * const tsax = tSax(xmlString);
      * while (true) {
      *   switch (tsax.next()) {
      *     case "element":
@@ -400,11 +406,11 @@ function tSax(S) {
      * * `"text"`:  A text node. Available methods:
      *   * `rawText()`
      */
-     next: function next() {
+    next: function next() {
       tagNameEnd = -1;
       textEnd = -1;
       piTargetEnd = -1;
-      hasAttributes = false;
+      mightHaveAttributes = false;
       textIsEscaped = false;
 
       if (S.charCodeAt(pos) !== openBracketCC) {
@@ -431,7 +437,10 @@ function tSax(S) {
             case letterDCC:
               return parseDoctype();
             default:
-              return err(pos, `Unexpected character sequence ${S.substring(pos, pos + 3)}`);
+              return err(
+                pos,
+                `Unexpected character sequence ${S.substring(pos, pos + 3)}`
+              );
           }
       }
       // Set the escaping flag because attributes are escaped
@@ -444,16 +453,16 @@ function tSax(S) {
      * original upper/lower case, including prefix. `undefined` if the current
      * event is not a start or end tag.
      */
-    tagName: function() {
+    tagName: function () {
       return tagNameEnd > 0 ? S.substring(tagNameStart, tagNameEnd) : undefined;
     },
 
-    localName: function() {
+    localName: function () {
       const tagName = this.tagName();
       return tagName && (localNameCache[tagName] || cacheLocalName(tagName));
     },
 
-    prefix: function() {
+    prefix: function () {
       const tagName = this.tagName();
       return tagName && (prefixCache[tagName] || cachePrefix(tagName));
     },
@@ -463,26 +472,28 @@ function tSax(S) {
      * "tag name" of a processing instruction. `undefined` if the current event
      * is not a processing instruction.
      */
-    piTarget: function() {
-      return piTargetEnd > 0 ? S.substring(tagNameStart, piTargetEnd) : undefined;
+    piTarget: function () {
+      return piTargetEnd > 0
+        ? S.substring(tagNameStart, piTargetEnd)
+        : undefined;
     },
 
     /***
-    * Only available if the current event is `"cdata"`, `"comment"`,
-    * `"doctype"`, `"processingInstruction"`, or `"text"`. Otherwise,
-    * `undefined` is returned.
-    * @param {boolean} [raw]  If `true`, will return XML text verbatim. If
-    * falsy, entities will be resolved.
-    * @returns {string|undefined}  If there was a problem resolving entities,
-    * `undefined` is returned and an error message can be retrieved with
-    * `error()`.
-    */
-    text: function(raw) {
+     * Only available if the current event is `"cdata"`, `"comment"`,
+     * `"doctype"`, `"processingInstruction"`, or `"text"`. Otherwise,
+     * `undefined` is returned.
+     * @param {boolean} [raw]  If `true`, will return XML text verbatim. If
+     * falsy, entities will be resolved.
+     * @returns {string|undefined}  If there was a problem resolving entities,
+     * `undefined` is returned and an error message can be retrieved with
+     * `error()`.
+     */
+    text: function (raw) {
       if (textEnd < 0) {
         return undefined;
       }
       const rawText = S.substring(textStart, textEnd);
-      return raw ||  !textIsEscaped ? rawText : unescapeText(rawText);
+      return raw || !textIsEscaped ? rawText : unescapeText(rawText);
     },
 
     /**
@@ -498,8 +509,8 @@ function tSax(S) {
      * If an error occurs during attribute parsing, returns `"error"`. To get
      * the error message, use the `error()` method.
      */
-    attributes: function(raw) {
-      if (!hasAttributes) {
+    attributes: function (raw) {
+      if (!mightHaveAttributes) {
         return undefined;
       }
 
@@ -518,7 +529,9 @@ function tSax(S) {
       while (true) {
         const attributeStart = pos + 1;
 
-        if (S.charCodeAt(posOfFirst(attributeNameEndChars)) === closeBracketCC) {
+        if (
+          S.charCodeAt(posOfFirst(attributeNameEndChars)) === closeBracketCC
+        ) {
           pos += 1;
           return attributes;
         }
@@ -537,7 +550,7 @@ function tSax(S) {
         } else {
           const value = unescapeText(rawValue);
           if (value === undefined) {
-            return undefined
+            return undefined;
           }
           attributes[attributeName] = value;
         }
@@ -547,10 +560,10 @@ function tSax(S) {
     },
 
     /**
-    * @returns  Error message. `undefined` unless the current event is an error
-    * event.
-    */
-    error: function() {
+     * @returns  Error message. `undefined` unless the current event is an error
+     * event.
+     */
+    error: function () {
       return error;
     },
   };
