@@ -1,22 +1,27 @@
 // @ts-check
 
 const openBracketCC = "<".charCodeAt(0);
+const closeBracketCC = ">".charCodeAt(0);
 const minusCC = "-".charCodeAt(0);
 const slashCC = "/".charCodeAt(0);
 const exclamationCC = "!".charCodeAt(0);
 const questionCC = "?".charCodeAt(0);
 const openCornerBracketCC = "[".charCodeAt(0);
 const letterDCC = "D".charCodeAt(0);
+const letterxCC = "x".charCodeAt(0);
 const spaceCC = " ".charCodeAt(0);
-const isNameEnd = (() => {
+const nameEndChars = charCodeMap(" \t\n\r/>?[");
+const quoteChars = charCodeMap(`"'`);
+const attributeNameEndChars = charCodeMap("=>");
+
+function charCodeMap(string) {
   /** @type Array.<true|undefined> Maps char codes that end a name to `true`*/
-  const nameEndMap = [];
-  const chars = [..." \t\n\r/>?["];
-  for (const char of chars) {
-    nameEndMap[char.charCodeAt(0)] = true;
+  const charMap = [];
+  for (const char of [...string]) {
+    charMap[char.charCodeAt(0)] = true;
   }
-  return nameEndMap;
-})();
+  return charMap;
+}
 
 
 /**
@@ -103,9 +108,9 @@ function tSax(S) {
 
   function parseDoctype() {
     // Skip the 10 characters of '<!DOCTYPE '
-    pos += 10;
-    tagNameStart = pos;
-    tagNameEnd = parseName();
+    tagNameStart = pos + 10;
+    pos += 11;
+    tagNameEnd = posOfFirst(nameEndChars);
     // We have to skip any '<!ELEMENT>', '<!ENTITY>', '<!ATTLIST>' or
     // '<!NOTATION>' declarations. We do this by counting opening and closing
     // '<' and '>' brackets. Initially, we have 1 open bracket from
@@ -167,9 +172,9 @@ function tSax(S) {
   }
 
   function parseStartTag() {
-    pos += 1;
-    tagNameStart = pos;
-    tagNameEnd = parseName();
+    tagNameStart = pos + 1;
+    pos += 2;
+    tagNameEnd = posOfFirst(nameEndChars);
     tagEnd = S.indexOf(">", tagNameEnd);
     if (tagEnd < 0) {
       return unexpectedEOF(tagNameStart, "'>'");
@@ -180,9 +185,9 @@ function tSax(S) {
   }
 
   function parseProcessingInstruction() {
-    pos += 2;
-    tagNameStart = pos;
-    piTargetEnd = parseName();
+    tagNameStart = pos + 2;
+    pos += 3;
+    piTargetEnd = posOfFirst(nameEndChars);
     tagEnd = S.indexOf("?>", piTargetEnd);
     if (tagEnd < 0) {
       return unexpectedEOF(tagNameStart, "'?>'");
@@ -193,10 +198,16 @@ function tSax(S) {
     return "processingInstruction";
   }
 
-  function parseName() {
-    do {
+  /**
+   *
+   * @param {(true|undefined)[]} endChars  An array mapping end character codes
+   * to `true`.
+   * @returns {number}  The position of the first found
+   */
+  function posOfFirst(endChars) {
+    while (!endChars[S.charCodeAt(pos)] && pos < S.length) {
       pos += 1;
-    } while (!isNameEnd[S.charCodeAt(pos)] && pos < S.length)
+    }
     return pos;
   }
 
@@ -222,19 +233,6 @@ function tSax(S) {
     const prefix = nameComponents.length === 1 ? "" : nameComponents[0];
     prefixCache[tagName] = prefix;
     return prefix;
-  }
-
-  /**
-   * @param {string} chars
-   * @returns One of the characters in the `chars` string, whichever is found
-   * first after the current position. If end of file is reached, the empty
-   * string is returned.
-   */
-  function firstCharOf(chars) {
-    while (chars.indexOf(S[pos]) < 0 && pos < S.length) {
-      pos += 1;
-    }
-    return S[pos];
   }
 
   return {
