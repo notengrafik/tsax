@@ -154,8 +154,11 @@ function tSax(S) {
 
 
   /**
-   * @param {"cdata"|"comment"|"processingInstruction"|"text"} type
+   * @param {"cdata"|"comment"|"text"} type
    * @param {number} skip  Number of characters before actual text begins
+   * @param {number} skipEnd  Number of characters to skip after the text end,
+   * e.g. for comment 3 characters (length of '-->'), but 0 for text as the
+   * trailing '<' already starts the next event.
    * @param {string} end  String that ends the text, e.g. '-->' for comment
    * @returns {"cdata"|"comment"|"error"|"processingInstruction"|"text"}
    */
